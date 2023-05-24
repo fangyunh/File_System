@@ -7,11 +7,51 @@
 #include "disk.h"
 #include "fs.h"
 
+#define FAT_EOC 0xFFFF
+
 /* TODO: Phase 1 */
+// Data structures of blocks
+struct superblock {
+    char signature[8];
+    uint16_t disk_block_num;    // Total amount of blocks of virtual disk
+    uint16_t root_dict;
+    uint16_t start_idx;         // Data block start index
+    uint16_t data_block_num;
+    uint8_t fat_block_num;
+    char padding[4079];
+} __attribute__ ((packed));
+
+struct fat {
+    uint16_t* entries;
+    size_t size;
+};
+
+struct root {
+    char file_name[FS_FILENAME_LEN];
+    uint32_t file_size;
+    uint16_t first_data_idx;
+    char padding[10];
+}__attribute__((packed));
 
 int fs_mount(const char *diskname)
 {
 	/* TODO: Phase 1 */
+    struct superblock sb;
+
+    if (block_disk_open(diskname) == -1) {
+        return -1;
+    }
+
+    if(block_read(0, (void*)sb) == -1) {
+        return -1;
+    }
+
+    if (strcmp(sb.signature, "ECS150FS") != 0) {
+        return -1;
+    }
+
+    
+
 }
 
 int fs_umount(void)
