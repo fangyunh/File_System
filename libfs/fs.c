@@ -37,11 +37,14 @@ int fs_mount(const char *diskname)
 {
 	/* TODO: Phase 1 */
     struct superblock sb;
+    struct fat fat_block;
+    struct root rt_dirt;
 
     if (block_disk_open(diskname) == -1) {
         return -1;
     }
 
+    // Read Superblock
     if(block_read(0, (void*)sb) == -1) {
         return -1;
     }
@@ -50,8 +53,19 @@ int fs_mount(const char *diskname)
         return -1;
     }
 
-    
+    // Read FAT
+    for (size_t i = 0; i < (size_t)sb.fat_block_num; i++) {
+        if (block_read(i + 1, (void*)&fat_block.entries[i]) == -1) {
+            return -1;
+        }
+    }
 
+    // Read Root directory
+    if (block_read(sb.fat_block_num + 1, (void*)&rt_dirt) == -1) {
+        return -1;
+    }
+
+    return 0;
 }
 
 int fs_umount(void)
