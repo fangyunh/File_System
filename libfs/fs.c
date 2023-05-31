@@ -14,7 +14,7 @@
 
 /* TODO: Phase 1 */
 // Data structures of blocks
-struct superblock {
+struct __attribute__((__packed__))superblock {
     char signature[8];
     uint16_t total_blk_num;    // Total amount of blocks of virtual disk
     uint16_t rdir_idx;
@@ -24,12 +24,12 @@ struct superblock {
     char padding[4079];
 } __attribute__ ((packed));
 
-struct fat {
+struct __attribute__((__packed__)) fat {
     uint16_t* entries;
     uint16_t size;
 };
 
-struct root {
+struct __attribute__((__packed__)) root {
     char file_name[FS_FILENAME_LEN];
     uint32_t file_size;
     uint16_t first_data_idx;
@@ -139,14 +139,14 @@ int fs_info(void)
 int fs_create(const char *filename)
 {
     /* TODO: Phase 2 */
-    if (!is_mount || strlen(filename) > FS_FILENAME_LEN) {
+    if (!is_mount || strlen(filename) > RDIR_EN_LEN) {
         return -1;
     }
 
     // Find an empty slot in the root directory.
     for (int i = 0; i < rt_dirt.size; i++) {
         if (rt_dirt[i].file_name[0] == '\0') {
-            strncpy(rt_dirt[i].file_name, filename, FS_FILENAME_LEN);
+            memcpy(rdir[i].filename, (void*)filename, RDIR_EN_LEN);
             rt_dirt[i].file_size = 0;
             rt_dirt[i].first_data_idx = FAT_EOC;
             // You may need to write changes to the disk here.
@@ -202,7 +202,6 @@ int fs_ls(void)
 
     return 0;
 }
-
 
 int fs_open(const char *filename)
 {
