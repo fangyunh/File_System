@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "disk.h"
 #include "fs.h"
@@ -40,6 +41,7 @@ struct superblock super_blk;
 struct fat fat_blk;
 struct root rt_dirt;
 int is_mount = 0;
+int opened_fd[FS_OPEN_MAX_COUNT] = {0};
 
 int fs_mount(const char *diskname)
 {
@@ -152,21 +154,106 @@ int fs_ls(void)
 int fs_open(const char *filename)
 {
 	/* TODO: Phase 3 */
+
+    if (!is_mount) {
+        return -1;
+    }
+
+    if (filename == NULL) {
+        return -1;
+    }
+
+    int fd = open(filename, O_RDWR);
+    if (fd == -1) {
+        return -1;
+    }
+
+    if(fd >= FS_OPEN_MAX_COUNT) {
+        close(fd);
+        return -1;
+    }
+    opened_fd[fd] = 1;
+
+    return fd;
 }
 
 int fs_close(int fd)
 {
 	/* TODO: Phase 3 */
+    if (!is_mount) {
+        return -1;
+    }
+
+    if (fd >= FS_OPEN_MAX_COUNT || fd < 0) {
+        return -1
+    }
+
+    if (opened_fd[fd] == 0) {
+        return -1;
+    }
+
+    opened_fd[fd] = 0;
+    close(fd);
+    return 0;
 }
 
 int fs_stat(int fd)
 {
 	/* TODO: Phase 3 */
+    if (!is_mount) {
+        return -1;
+    }
+
+    if (fd >= FS_OPEN_MAX_COUNT || fd < 0) {
+        return -1
+    }
+
+    if (opened_fd[fd] == 0) {
+        return -1;
+    }
+
+    // Ref: https://man7.org/linux/man-pages/man2/lseek.2.html
+    off_t cur_offset = lseek(fd, 0, SEEK_CUR);
+    if (cur_offset == (off_t)-1) {
+        return -1;
+    }
+
+    off_t size = lseek(fd, 0, SEEK_END);
+    if (size == (off_t)-1) {
+        return -1;
+    }
+
+    if (lseek(fd, cur_offset, SEEK_SET) == (off_t)-1) {
+        return -1;
+    }
+
+    return size;
 }
 
 int fs_lseek(int fd, size_t offset)
 {
 	/* TODO: Phase 3 */
+    if (!is_mount) {
+        return -1;
+    }
+
+    if (fd >= FS_OPEN_MAX_COUNT || fd < 0) {
+        return -1
+    }
+
+    if (opened_fd[fd] == 0) {
+        return -1;
+    }
+
+    if (offset > (size_t) fs_stat(fd)) {
+        return -1;
+    }
+
+    if (lseek(fd, offset, SEEK_SET) == (off_t)-1) {
+        return -1;
+    }
+
+    return 0;
 }
 
 int fs_write(int fd, void *buf, size_t count)
