@@ -438,7 +438,6 @@ int fs_write(int fd, void *buf, size_t count)
 
 int fs_read(int fd, void *buf, size_t count)
 {
-    /* TODO: Phase 4 */
     if (!is_mount) {
         return -1;
     }
@@ -455,37 +454,51 @@ int fs_read(int fd, void *buf, size_t count)
         return -1;
     }
 
-    size_t remaining = count;
-    size_t buf_pos = 0;
-    uint read_size = 0;
+    // Get the file size.
+    int file_size = get_file_size(fd);
+    if (file_size == -1) {
+        return -1;
+    }
 
-    while (remaining > 0) {
+    // Determine the actual number of bytes to read.
+    int actual_count = count;
+    if (opened_fd[fd].offset + count > file_size) {
+        actual_count = file_size - opened_fd[fd].offset;
+    }
+
+    // If there are no bytes to read, return 0.
+    if (actual_count <= 0) {
+        return 0;
+    }
+
+    char *bounce = (char *) calloc(BLOCK_SIZE, sizeof(char));
+    if (bounce == NULL) {
+        return -1;
+    }
+
+    int read_count = 0;
+    while (read_count < actual_count) {
         int data_blk_idx = get_data_blk_idx(fd);
-        char *bounce = (char *) calloc(BLOCK_SIZE, sizeof(char));
-        int cur_offset = opened_fd[fd].offset;
-        size_t offset_in_blk = cur_offset % BLOCK_SIZE;
-        size_t cost = 0;
-
-        if (BLOCK_SIZE - offset_in_blk > remaining) {
-            cost = remaining;
-        } else {
-            cost = BLOCK_SIZE - offset_in_blk;
+        if (data_blk_idx == -1) {
+            free(bounce);
+            return -1;
         }
 
         if (block_read(data_blk_idx, (void *)bounce) == -1) {
             free(bounce);
             return -1;
         }
-        memcpy((char *)buf + buf_pos, bounce + cur_offset % BLOCK_SIZE, cost);
-        buf_pos += cost;
-        remaining -= cost;
-        read_size += cost;
-        cur_offset += cost;
 
-        fs_lseek(fd, cur_offset);
-        free(bounce);
+        int offset_in_block = opened_fd[fd].offset % BLOCK_SIZE;
+        int bytes_in_block = min(actual_count - read_count, BLOCK_SIZE - offset_in_block);
+        
+        memcpy((char *)buf + read_count, bounce + offset_in_block, bytes_in_block);
+        
+        read_count += bytes_in_block;
+        fs_lseek(fd, opened_fd[fd].offset + bytes_in_block);
     }
 
-    return read_size;
+    free(bounce);
+    return read_count;
 }
 
