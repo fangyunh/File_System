@@ -438,7 +438,7 @@ int fs_write(int fd, void *buf, size_t count)
 
 int fs_read(int fd, void *buf, size_t count)
 {
-	/* TODO: Phase 4 */
+    /* TODO: Phase 4 */
     if (!is_mount) {
         return -1;
     }
@@ -455,18 +455,11 @@ int fs_read(int fd, void *buf, size_t count)
         return -1;
     }
 
-    uint32_t file_size = rt_dirt[opened_fd[fd].root_idx].file_size;
-
-    if (opened_fd[fd].offset >= file_size) {
-        // Offset is already at or beyond the end of file.
-        return 0;
-    }
-
     size_t remaining = count;
     size_t buf_pos = 0;
-    int read_size = 0;
+    uint read_size = 0;
 
-    while (remaining > 0 && opened_fd[fd].offset < file_size) {
+    while (remaining > 0) {
         int data_blk_idx = get_data_blk_idx(fd);
         char *bounce = (char *) calloc(BLOCK_SIZE, sizeof(char));
         int cur_offset = opened_fd[fd].offset;
@@ -477,11 +470,6 @@ int fs_read(int fd, void *buf, size_t count)
             cost = remaining;
         } else {
             cost = BLOCK_SIZE - offset_in_blk;
-        }
-
-        // Check if cost + offset is beyond EOF
-        if (cur_offset + cost > file_size) {
-            cost = file_size - cur_offset;
         }
 
         if (block_read(data_blk_idx, (void *)bounce) == -1) {
@@ -500,3 +488,4 @@ int fs_read(int fd, void *buf, size_t count)
 
     return read_size;
 }
+
