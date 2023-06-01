@@ -146,7 +146,7 @@ int fs_create(const char *filename)
     // Find an empty slot in the root directory.
     for (int i = 0; i < rt_dirt->size; i++) {
         if (rt_dirt[i].file_name[0] == '\0') {
-            memcpy(rt_dirt[i]->filename, (void*)filename,  FS_FILENAME_LEN);
+            memcpy(rt_dirt[i].filename, (void*)filename,  FS_FILENAME_LEN);
             rt_dirt[i].file_size = 0;
             rt_dirt[i].first_data_idx = FAT_EOC;
             // You may need to write changes to the disk here.
