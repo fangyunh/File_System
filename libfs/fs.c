@@ -334,6 +334,22 @@ uint16_t allocate_new_block() {
     return 0; // No block left
 }
 
+int get_data_blk_idx(int fd) {
+    int blk_num = opened_fd[fd].cur_data_blk;
+    int blk_idx = 0;
+    int first_blk_idx = rt_dirt[opened_fd[fd].root_idx].first_data_idx;
+    if (blk_num == 0) {
+        return first_blk_idx;
+    } else {
+        for (int i = 0; i < blk_num; i++) {
+            blk_idx = fat_entries[first_blk_idx];
+            first_blk_idx = blk_idx;
+        }
+    }
+    blk_idx += super_blk.fat_blk_num + 2;
+    return blk_idx;
+}
+
 int fs_write(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
