@@ -439,9 +439,64 @@ int fs_write(int fd, void *buf, size_t count)
 int fs_read(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
+    if (!is_mount) {
+        return -1;
+    }
 
-    printf("File descriptor: %d\n", fd);
-    printf("Buffer address: %p\n", buf);
-    printf("Count: %zu\n", count);
-    return 0;
+    if (fd >= FS_OPEN_MAX_COUNT || fd < 0) {
+        return -1;
+    }
+
+    if (opened_fd[fd].seat == 0) {
+        return -1;
+    }
+
+    if (buf == NULL) {
+        return -1;
+    }
+
+    uint32_t file_size = rt_dirt[opened_fd[fd].root_idx].file_size;
+
+    if (opened_fd[fd].offset >= file_size) {
+        // Offset is already at or beyond the end of file.
+        return 0;
+    }
+
+    size_t remaining = count;
+    size_t buf_pos = 0;
+    int read_size = 0;
+
+    while (remaining > 0 && opened_fd[fd].offset < file_size) {
+        int data_blk_idx = get_data_blk_idx(fd);
+        char *bounce = (char *) calloc(BLOCK_SIZE, sizeof(char));
+        int cur_offset = opened_fd[fd].offset;
+        size_t offset_in_blk = cur_offset % BLOCK_SIZE;
+        size_t cost = 0;
+
+        if (BLOCK_SIZE - offset_in_blk > remaining) {
+            cost = remaining;
+        } else {
+            cost = BLOCK_SIZE - offset_in_blk;
+        }
+
+        // Check if cost + offset is beyond EOF
+        if (cur_offset + cost > file_size) {
+            cost = file_size - cur_offset;
+        }
+
+        if (block_read(data_blk_idx, (void *)bounce) == -1) {
+            free(bounce);
+            return -1;
+        }
+        memcpy((char *)buf + buf_pos, bounce + cur_offset % BLOCK_SIZE, cost);
+        buf_pos += cost;
+        remaining -= cost;
+        read_size += cost;
+        cur_offset += cost;
+
+        fs_lseek(fd, cur_offset);
+        free(bounce);
+    }
+
+    return read_size;
 }
