@@ -336,10 +336,75 @@ uint16_t allocate_new_block() {
 
 int fs_write(int fd, void *buf, size_t count)
 {
-   printf("File descriptor: %d\n", fd);
-   printf("Buffer address: %p\n", buf);
-   printf("Count: %zu\n", count);
-   return 0;
+	/* TODO: Phase 4 */
+    if (!is_mount) {
+        return -1;
+    }
+
+    if (fd >= FS_OPEN_MAX_COUNT || fd < 0) {
+        return -1;
+    }
+
+    if (opened_fd[fd].seat == 0) {
+        return -1;
+    }
+
+    if (buf == NULL) {
+        return -1;
+    }
+
+    size_t remaining = count;
+    size_t buf_pos = 0;
+    uint write_size = 0;
+
+    while (remaining > 0) {
+        int data_blk_idx = get_data_blk_idx(fd);
+        char *bounce = (char *) calloc(BLOCK_SIZE, sizeof(char));
+        int cur_offset = opened_fd[fd].offset;
+        size_t offset_in_blk = cur_offset % BLOCK_SIZE;
+        size_t cost = 0;
+        size_t free_idx = 0;
+
+        if (BLOCK_SIZE - offset_in_blk > remaining) {
+            cost = remaining;
+        } else {
+            cost = BLOCK_SIZE - offset_in_blk;
+        }
+
+        if (block_read(data_blk_idx, (void *)bounce) == -1) {
+            free(bounce);
+            return -1;
+        }
+        memcpy(bounce + cur_offset % BLOCK_SIZE, (char *)buf + buf_pos, cost);
+        block_write(data_blk_idx, (void *)bounce);
+        buf_pos += cost;
+        remaining -= cost;
+        write_size += cost;
+        cur_offset += cost;
+
+        if (remaining > 0 && (uint32_t)cur_offset >= rt_dirt[opened_fd[fd].root_idx].file_size) {
+            // Find free index
+            for (int i = 1; i < super_blk.data_block_num; i++) {
+                if (fat_entries[i] == 0) {
+                    free_idx = i;
+                    break;
+                }
+
+                if (i == super_blk.data_block_num - 1) {
+                    return -1;
+                }
+            }
+
+            // Allocate new block
+            fat_entries[data_blk_idx] = free_idx;
+            fat_entries[free_idx] = FAT_EOC;
+        }
+        rt_dirt[opened_fd[fd].root_idx].file_size += cost;
+        fs_lseek(fd, cur_offset);
+        free(bounce);
+    }
+
+    return write_size;
 }
 size_t fd_offset[FS_OPEN_MAX_COUNT] = {0};
 int fs_read(int fd, void *buf, size_t count)
