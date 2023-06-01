@@ -30,11 +30,23 @@ struct root {
     char padding[10];
 }__attribute__((packed));
 
+struct fd_table {
+    int seat;   // Reveal the position is occupied by a fd or not
+    int root_idx;   // Corresponding root index in root data structure
+    size_t offset;  // Current offset of the file
+};
+
 struct superblock super_blk;
 uint16_t* fat_entries;
 struct root rt_dirt[FS_FILE_MAX_COUNT];
 int is_mount = 0;
-int opened_fd[FS_OPEN_MAX_COUNT] = {0};
+struct fd_table opened_fd[FS_OPEN_MAX_COUNT];
+
+void ini_fdt(struct fd_table *fdt) {
+    for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        fdt[i].seat = 0;
+    }
+}
 
 int fs_mount(const char *diskname)
 {
@@ -73,6 +85,7 @@ int fs_mount(const char *diskname)
     }
 
     is_mount = 1;
+    ini_fdt(opened_fd);
     return 0;
 }
 
@@ -86,6 +99,12 @@ int fs_umount(void)
 
     if (block_disk_count() != -1) {
         return -1;
+    }
+
+    for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if (opened_fd[i].seat != 0) {
+            return -1;
+        }
     }
 
     if (block_disk_close() == -1) {
@@ -199,10 +218,19 @@ int fs_ls(void)
     return 0;
 }
 
+int find_file(const char *name) {
+    for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if (strcmp(name, (char *)rt_dirt[i].file_name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 int fs_open(const char *filename)
 {
 	/* TODO: Phase 3 */
-
+    int file_root_idx = 0;
     if (!is_mount) {
         return -1;
     }
@@ -211,18 +239,21 @@ int fs_open(const char *filename)
         return -1;
     }
 
-    int fd = open(filename, O_RDWR);
-    if (fd == -1) {
-        return -1;
+    file_root_idx = find_file(filename);
+    if (file_root_idx == -1) {
+        return file_root_idx;
     }
 
-    if(fd >= FS_OPEN_MAX_COUNT) {
-        close(fd);
-        return -1;
+    for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if (opened_fd[i].seat == 0) {
+            opened_fd[i].seat = 1;
+            opened_fd[i].root_idx = file_root_idx;
+            opened_fd[i].offset = 0;
+            return i;
+        }
     }
-    opened_fd[fd] = 1;
 
-    return fd;
+    return -1;
 }
 
 int fs_close(int fd)
@@ -236,12 +267,11 @@ int fs_close(int fd)
         return -1;
     }
 
-    if (opened_fd[fd] == 0) {
+    if (opened_fd[fd].seat == 0) {
         return -1;
     }
 
-    opened_fd[fd] = 0;
-    close(fd);
+    opened_fd[fd].seat = 0;
     return 0;
 }
 
@@ -256,26 +286,13 @@ int fs_stat(int fd)
         return -1;
     }
 
-    if (opened_fd[fd] == 0) {
+    if (opened_fd[fd].seat == 0) {
         return -1;
     }
 
-    // Ref: https://man7.org/linux/man-pages/man2/lseek.2.html
-    off_t cur_offset = lseek(fd, 0, SEEK_CUR);
-    if (cur_offset == (off_t)-1) {
-        return -1;
-    }
-
-    off_t size = lseek(fd, 0, SEEK_END);
-    if (size == (off_t)-1) {
-        return -1;
-    }
-
-    if (lseek(fd, cur_offset, SEEK_SET) == (off_t)-1) {
-        return -1;
-    }
-
+    uint32_t size = rt_dirt[opened_fd[fd].root_idx].file_size;
     return size;
+
 }
 
 int fs_lseek(int fd, size_t offset)
@@ -289,7 +306,7 @@ int fs_lseek(int fd, size_t offset)
         return -1;
     }
 
-    if (opened_fd[fd] == 0) {
+    if (opened_fd[fd].seat == 0) {
         return -1;
     }
 
@@ -297,9 +314,7 @@ int fs_lseek(int fd, size_t offset)
         return -1;
     }
 
-    if (lseek(fd, offset, SEEK_SET) == (off_t)-1) {
-        return -1;
-    }
+    opened_fd[fd].offset = offset;
 
     return 0;
 }
@@ -307,12 +322,12 @@ int fs_lseek(int fd, size_t offset)
 int fs_write(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
-    ;
+    return 0;
 }
 
 int fs_read(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
-    ;
+    return 0;
 }
 
