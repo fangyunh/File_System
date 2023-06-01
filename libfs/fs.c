@@ -154,17 +154,23 @@ int fs_info(void)
 int fs_create(const char *filename)
 {
 	/* TODO: Phase 2 */
-    if (!is_mount || strlen(filename) > FS_FILENAME_LEN) {
+    if (!is_mount || filename == NULL || strlen(filename) > FS_FILENAME_LEN) {
         return -1;
     }
 
+    // Check if file already exists
+    for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        if (strcmp(rt_dirt[i].file_name, filename) == 0) {
+            return -1;
+        }
+    }
     // Find an empty slot in the root directory.
     for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
         if (rt_dirt[i].file_name[0] == '\0') {
             memcpy(rt_dirt[i].file_name, (void*)filename,  FS_FILENAME_LEN);
             rt_dirt[i].file_size = 0;
             rt_dirt[i].first_data_idx = FAT_EOC;
-            // You may need to write changes to the disk here.
+         
 
             return 0;
         }
@@ -176,9 +182,22 @@ int fs_create(const char *filename)
 
 int fs_delete(const char *filename)
 {
-	/* TODO: Phase 2 */
+    /* TODO: Phase 2 */
     if (!is_mount) {
         return -1;
+    }
+
+    // Check if the filename is valid
+    if (filename == NULL || strlen(filename) > FS_FILENAME_LEN) {
+        return -1;
+    }
+
+    // Check if the file is currently open
+    for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
+        if (opened_fd[i].seat != 0 && strcmp(rt_dirt[opened_fd[i].root_idx].file_name, filename) == 0) {
+            // File is currently open
+            return -1;
+        }
     }
 
     for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
@@ -191,8 +210,7 @@ int fs_delete(const char *filename)
                 curr = next;
             }
             memset(&rt_dirt[i], 0, sizeof(rt_dirt[i])); // Clear the directory entry
-            // You may need to write changes to the disk here.
-
+          
             return 0;
         }
     }
@@ -200,6 +218,7 @@ int fs_delete(const char *filename)
     // If we reach here, the file does not exist.
     return -1;
 }
+
 
 int fs_ls(void)
 {
