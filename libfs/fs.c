@@ -11,6 +11,8 @@
 #define FAT_EOC 0xFFFF
 #define RDIR_EN_LEN 32
 #define FAT_EN_LEN 2
+#define BLOCK_SIZE 512
+#define FS_OPEN_MAX_COUNT 256
 
 /* TODO: Phase 1 */
 // Data structures of blocks
@@ -42,6 +44,7 @@ struct fat fat_blk[FS_OPEN_MAX_COUNT];
 struct root rt_dirt[FS_FILE_MAX_COUNT];
 int is_mount = 0;
 int opened_fd[FS_OPEN_MAX_COUNT] = {0};
+size_t fd_offset[FS_OPEN_MAX_COUNT];
 
 int fs_mount(const char *diskname)
 {
@@ -308,6 +311,21 @@ int fs_lseek(int fd, size_t offset)
     return 0;
 }
 
+uint16_t get_next_block_index(uint16_t current) {
+    return fat_entries[current];
+}
+
+uint16_t allocate_new_block() {
+    uint16_t fat_entries_num = super_blk.fat_blk_num * BLOCK_SIZE / sizeof(uint16_t);
+    for (uint16_t i = super_blk.data_idx; i < fat_entries_num; i++) {
+        if (fat_entries[i] == 0) {
+            fat_entries[i] = FAT_EOC;
+            return i;
+        }
+    }
+    return 0; // No block left
+}
+
 int fs_write(int fd, void *buf, size_t count)
 {
 	return 0;
@@ -315,7 +333,43 @@ int fs_write(int fd, void *buf, size_t count)
 
 int fs_read(int fd, void *buf, size_t count)
 {
-	/* TODO: Phase 4 */
-	return 0;
-}
+    if (!is_mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || opened_fd[fd] == 0 || buf == NULL) {
+        return -1;
+    }
 
+    size_t remaining = count;
+    char *cur_buf = (char *) buf;
+
+    // Calculate the current block index and offset within the block
+    uint16_t current_block = fd_offset[fd] / BLOCK_SIZE;
+    size_t block_offset = fd_offset[fd] % BLOCK_SIZE;
+
+    while (remaining > 0 && current_block != FAT_EOC) {
+        char block[BLOCK_SIZE];
+        if (block_read(current_block, block) == -1) {
+            break;
+        }
+
+        // Calculate how many bytes we can read in the current block
+        size_t to_read = remaining;
+        if (to_read > BLOCK_SIZE - block_offset) {
+            to_read = BLOCK_SIZE - block_offset;
+        }
+
+        memcpy(cur_buf, block + block_offset, to_read);
+
+        remaining -= to_read;
+        cur_buf += to_read;
+        fd_offset[fd] += to_read;
+
+        // If we are at the end of a block, move to the next one.
+        if (block_offset + to_read == BLOCK_SIZE) {
+            current_block = get_next_block_index(current_block);
+            block_offset = 0;
+        } else {
+            block_offset += to_read;
+        }
+    }
+
+    return count - remaining;
+}
