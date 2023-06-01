@@ -144,9 +144,9 @@ int fs_create(const char *filename)
     }
 
     // Find an empty slot in the root directory.
-    for (int i = 0; i < rt_dirt.size; i++) {
+    for (int i = 0; i < rt_dirt->size; i++) {
         if (rt_dirt[i].file_name[0] == '\0') {
-            memcpy(rt_rdir[i].filename, (void*)filename,  FS_FILENAME_LEN);
+            memcpy(rt_dirt[i]->filename, (void*)filename,  FS_FILENAME_LEN);
             rt_dirt[i].file_size = 0;
             rt_dirt[i].first_data_idx = FAT_EOC;
             // You may need to write changes to the disk here.
@@ -166,13 +166,13 @@ int fs_delete(const char *filename)
         return -1;
     }
 
-    for (int i = 0; i < rt_dirt.size; i++) {
+    for (int i = 0; i < rt_dirt->size; i++) {
         if (strcmp(rt_dirt[i].file_name, filename) == 0) {
             // Found the file. Now remove it.
             uint16_t curr = rt_dirt[i].first_data_idx;
             while (curr != FAT_EOC) {
-                uint16_t next = fat_blk.entries[curr];
-                fat_blk.entries[curr] = 0; // Free the block
+                uint16_t next = fat_blk->entries[curr];
+                fat_blk->entries[curr] = 0; // Free the block
                 curr = next;
             }
             memset(&rt_dirt[i], 0, sizeof(rt_dirt[i])); // Clear the directory entry
@@ -194,7 +194,7 @@ int fs_ls(void)
     }
 
     printf("FS Ls:\n");
-    for (int i = 0; i < rt_dirt.size; i++) {
+    for (int i = 0; i < rt_dirt->size; i++) {
         if (rt_dirt[i].file_name[0] != '\0') {
             printf("file: %s, size: %u, data_blk: %u\n", rt_dirt[i].file_name, rt_dirt[i].file_size, rt_dirt[i].first_data_idx);
         }
