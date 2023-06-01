@@ -60,10 +60,10 @@ int fs_mount(const char *diskname)
         return -1;
     }
 
-    if (strcmp(super_blk.signature, "ECS150FS") != 0) {
+    if (memcmp(&super_blk.signature, "ECS150FS", 8) != 0) {
         return -1;
     }
-
+    
     if (super_blk.total_blk_num != block_disk_count()) {
         return -1;
     }
@@ -322,12 +322,18 @@ int fs_lseek(int fd, size_t offset)
 int fs_write(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
+    printf("File descriptor: %d\n", fd);
+    printf("Buffer address: %p\n", buf);
+    printf("Count: %zu\n", count);
     return 0;
 }
 
 int fs_read(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
+    printf("File descriptor: %d\n", fd);
+    printf("Buffer address: %p\n", buf);
+    printf("Count: %zu\n", count);
     return 0;
 }
 
