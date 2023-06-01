@@ -341,10 +341,10 @@ int fs_write(int fd, void *buf, size_t count)
    printf("Count: %zu\n", count);
    return 0;
 }
-
+size_t fd_offset[FS_OPEN_MAX_COUNT] = {0};
 int fs_read(int fd, void *buf, size_t count)
 {
-    if (!is_mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || opened_fd[fd] == 0 || buf == NULL) {
+    if (!is_mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT ||  buf == NULL) {
         return -1;
     }
 
