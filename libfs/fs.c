@@ -97,20 +97,27 @@ int fs_umount(void)
         return -1;
     }
 
-    if (block_disk_count() != -1) {
-        return -1;
-    }
-
     for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
         if (opened_fd[i].seat != 0) {
             return -1;
         }
     }
 
+    for (int i = 0; i < super_blk.fat_blk_num; i++) {
+        block_write(super_blk.data_idx + i, &fat_entries[i * BLOCK_SIZE]);
+    }
+
+    for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+        block_write(super_blk.rdir_idx + i, &rt_dirt[i]);
+    }
+
+    block_write(0, &super_blk);
+
     if (block_disk_close() == -1) {
         return -1;
     }
     free(fat_entries);
+    is_mount = 0;
     return 0;
 }
 
@@ -356,6 +363,7 @@ int fs_write(int fd, void *buf, size_t count)
     if (buf == NULL) {
         return -1;
     }
+
     size_t remaining = count;
     size_t buf_pos = 0;
     uint write_size = 0;
@@ -377,18 +385,15 @@ int fs_write(int fd, void *buf, size_t count)
         if (block_read(data_blk_idx, (void *)bounce) == -1) {
             free(bounce);
             return -1;
-        };
+        }
         memcpy(bounce + cur_offset % BLOCK_SIZE, (char *)buf + buf_pos, cost);
         block_write(data_blk_idx, (void *)bounce);
         buf_pos += cost;
         remaining -= cost;
         write_size += cost;
-        if (fs_lseek(fd, cur_offset + cost) == -1) {
-            free(bounce);
-            return -1;
-        }
+        cur_offset += cost;
 
-        if (remaining > 0 && opened_fd[fd].offset >= rt_dirt[opened_fd[fd].root_idx].file_size) {
+        if (remaining > 0 && (uint32_t)cur_offset >= rt_dirt[opened_fd[fd].root_idx].file_size) {
             // Find free index
             for (int i = 1; i < super_blk.data_block_num; i++) {
                 if (fat_entries[i] == 0) {
@@ -406,6 +411,7 @@ int fs_write(int fd, void *buf, size_t count)
             fat_entries[free_idx] = FAT_EOC;
         }
         rt_dirt[opened_fd[fd].root_idx].file_size += cost;
+        fs_lseek(fd, cur_offset);
         free(bounce);
     }
 
