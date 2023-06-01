@@ -37,7 +37,7 @@ struct fd_table {
 };
 
 struct superblock super_blk;
-uint16_t* fat_entries;
+uint16_t* fat_entries = NULL;
 struct root rt_dirt[FS_FILE_MAX_COUNT];
 int is_mount = 0;
 struct fd_table opened_fd[FS_OPEN_MAX_COUNT];
@@ -63,15 +63,13 @@ int fs_mount(const char *diskname)
     if (memcmp(&super_blk.signature, "ECS150FS", 8) != 0) {
         return -1;
     }
-    
+
     if (super_blk.total_blk_num != block_disk_count()) {
         return -1;
     }
 
     // Read FAT
-    size_t fat_entries_num = super_blk.fat_blk_num * BLOCK_SIZE / sizeof(uint16_t);
-    fat_entries = (uint16_t *) calloc(fat_entries_num, sizeof(uint16_t));
-
+    fat_entries = (uint16_t *) calloc(super_blk.data_block_num * 2, sizeof(uint16_t));
     for (size_t i = SUPER_BLK_IDX + 1; i < (size_t)super_blk.rdir_idx; i++) {
         size_t offset = (i - SUPER_BLK_IDX + 1) * BLOCK_SIZE / sizeof(uint16_t);
         if (block_read(i, (void*)(fat_entries + offset)) == -1) {
@@ -86,6 +84,7 @@ int fs_mount(const char *diskname)
 
     is_mount = 1;
     ini_fdt(opened_fd);
+
     return 0;
 }
 
@@ -121,10 +120,8 @@ int fs_info(void)
         return -1;
     }
 
-    uint16_t fat_free = 0;
+    int fat_free = 0;
     int rdir_free = 0;
-    uint16_t fat_entries_num = super_blk.fat_blk_num * BLOCK_SIZE / sizeof(uint16_t);
-
     printf("FS Info:\n");
     printf("total_blk_count=%u\n", super_blk.total_blk_num);
     printf("fat_blk_count=%u\n", super_blk.fat_blk_num);
@@ -132,12 +129,12 @@ int fs_info(void)
     printf("data_blk=%u\n", super_blk.data_idx);
     printf("data_blk_count=%u\n", super_blk.data_block_num);
 
-    for (uint16_t i = 0; i < fat_entries_num; i++) {
+    for (int i = 1; i < super_blk.data_block_num; i++) {
         if (fat_entries[i] == 0) {
             fat_free++;
         }
     }
-    printf("fat_free_ratio=%u/%u\n", fat_free, fat_entries_num);
+    printf("fat_free_ratio=%u/%u\n", fat_free, super_blk.data_block_num);
 
     for (int j = 0; j < FS_FILE_MAX_COUNT; j++) {
         struct root cur_entry = rt_dirt[j];
