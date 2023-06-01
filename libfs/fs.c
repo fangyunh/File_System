@@ -328,7 +328,28 @@ uint16_t allocate_new_block() {
 
 int fs_write(int fd, void *buf, size_t count)
 {
-	return 0;
+    if (!is_mount || fd < 0 || fd >= FS_OPEN_MAX_COUNT || opened_fd[fd] == 0 || buf == NULL) {
+        return -1;
+    }
+
+    size_t remaining = count;
+    const char *cur_buf = (const char *) buf;
+
+    // Calculate the current block index and offset within the block
+    uint16_t current_block = fd_offset[fd] / BLOCK_SIZE;
+    size_t block_offset = fd_offset[fd] % BLOCK_SIZE;
+
+    while (remaining > 0) {
+        char block[BLOCK_SIZE];
+        if (block_read(current_block, block) == -1) {
+            // If we can't read the current block, we need to allocate a new one.
+            current_block = allocate_new_block();
+            if (current_block == FAT_EOC) {
+                // If we can't allocate a new block, we're out of disk space.
+                break
+		    }
+	}
+    }
 }
 
 int fs_read(int fd, void *buf, size_t count)
