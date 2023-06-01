@@ -33,6 +33,7 @@ struct root {
 struct fd_table {
     int seat;   // Reveal the position is occupied by a fd or not
     int root_idx;   // Corresponding root index in root data structure
+    int cur_data_blk;   // The i-th data block for offset
     size_t offset;  // Current offset of the file
 };
 
@@ -215,7 +216,7 @@ int fs_ls(void)
     return 0;
 }
 
-int find_file(const char *name) {
+int file_exist(const char *name) {
     for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
         if (strcmp(name, (char *)rt_dirt[i].file_name) == 0) {
             return i;
@@ -236,9 +237,9 @@ int fs_open(const char *filename)
         return -1;
     }
 
-    file_root_idx = find_file(filename);
+    file_root_idx = file_exist(filename);
     if (file_root_idx == -1) {
-        return file_root_idx;
+        return -1;
     }
 
     for (int i = 0; i < FS_OPEN_MAX_COUNT; i++) {
@@ -246,6 +247,7 @@ int fs_open(const char *filename)
             opened_fd[i].seat = 1;
             opened_fd[i].root_idx = file_root_idx;
             opened_fd[i].offset = 0;
+            opened_fd[i].cur_data_blk = 0;
             return i;
         }
     }
@@ -312,13 +314,49 @@ int fs_lseek(int fd, size_t offset)
     }
 
     opened_fd[fd].offset = offset;
+    // Calculate the offset is in which block in the file
+    if (opened_fd[fd].offset >= BLOCK_SIZE) {
+        opened_fd[fd].cur_data_blk = opened_fd[fd].offset / BLOCK_SIZE;
+    }
 
     return 0;
+}
+// Return the data blk idx of offset currently in
+int get_data_blk_idx(int fd) {
+    int blk_num = opened_fd[fd].cur_data_blk;
+    int blk_idx = 0;
+    int first_blk_idx = rt_dirt[opened_fd[fd].root_idx].first_data_idx;
+    if (blk_num == 0) {
+        return first_blk_idx;
+    } else {
+        for (int i = 0; i < blk_num; i++) {
+            blk_idx = fat_entries[first_blk_idx];
+            first_blk_idx = blk_idx;
+        }
+    }
+    return blk_idx;
 }
 
 int fs_write(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
+    if (!is_mount) {
+        return -1;
+    }
+
+    if (fd >= FS_OPEN_MAX_COUNT || fd < 0) {
+        return -1;
+    }
+
+    if (opened_fd[fd].seat == 0) {
+        return -1;
+    }
+
+    if (buf == NULL) {
+        return -1;
+    }
+
+
     printf("File descriptor: %d\n", fd);
     printf("Buffer address: %p\n", buf);
     printf("Count: %zu\n", count);
@@ -328,6 +366,7 @@ int fs_write(int fd, void *buf, size_t count)
 int fs_read(int fd, void *buf, size_t count)
 {
 	/* TODO: Phase 4 */
+
     printf("File descriptor: %d\n", fd);
     printf("Buffer address: %p\n", buf);
     printf("Count: %zu\n", count);
