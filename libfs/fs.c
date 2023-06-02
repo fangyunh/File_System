@@ -38,7 +38,7 @@ struct fd_table {
 };
 
 struct superblock super_blk;
-uint16_t* fat_entries = NULL;
+uint16_t* fat_entries;
 struct root rt_dirt[FS_FILE_MAX_COUNT];
 int is_mount = 0;
 struct fd_table opened_fd[FS_OPEN_MAX_COUNT];
@@ -70,9 +70,9 @@ int fs_mount(const char *diskname)
     }
 
     // Read FAT
-    fat_entries = (uint16_t *) calloc(super_blk.data_block_num * 2, sizeof(uint16_t));
-    for (size_t i = SUPER_BLK_IDX + 1; i < (size_t)super_blk.rdir_idx; i++) {
-        size_t offset = (i - SUPER_BLK_IDX + 1) * BLOCK_SIZE / sizeof(uint16_t);
+    fat_entries = calloc(super_blk.fat_blk_num * BLOCK_SIZE, sizeof(uint16_t));
+    for (size_t i = SUPER_BLK_IDX + 1; i < (size_t)super_blk.fat_blk_num + 1; i++) {
+        size_t offset = (i - SUPER_BLK_IDX - 1) * BLOCK_SIZE;
         if (block_read(i, (void*)(fat_entries + offset)) == -1) {
             return -1;
         }
@@ -103,12 +103,15 @@ int fs_umount(void)
         }
     }
 
-    for (int i = 0; i < super_blk.fat_blk_num; i++) {
-        block_write(super_blk.data_idx + i, &fat_entries[i * BLOCK_SIZE]);
+    for (size_t i = SUPER_BLK_IDX + 1; i < (size_t)super_blk.fat_blk_num + 1; i++) {
+        size_t offset = (i - SUPER_BLK_IDX - 1) * BLOCK_SIZE;
+        if (block_write(i, (void*)(fat_entries + offset)) == -1) {
+            return -1;
+        }
     }
 
-    for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
-        block_write(super_blk.rdir_idx + i, &rt_dirt[i]);
+    if (block_write(super_blk.rdir_idx, (void*)rt_dirt) == -1) {
+        return -1;
     }
 
     block_write(0, &super_blk);
@@ -209,11 +212,12 @@ int fs_delete(const char *filename)
         if (strcmp(rt_dirt[i].file_name, filename) == 0) {
             // Found the file. Now remove it.
             uint16_t curr = rt_dirt[i].first_data_idx;
-            while (curr != FAT_EOC) {
+            while (fat_entries[curr] != FAT_EOC) {
                 uint16_t next = fat_entries[curr];
                 fat_entries[curr] = 0; // Free the block
                 curr = next;
             }
+            fat_entries[curr] = 0;
             memset(&rt_dirt[i], 0, sizeof(rt_dirt[i])); // Clear the directory
 
             return 0;
