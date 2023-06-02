@@ -437,7 +437,6 @@ int fs_write(int fd, void *buf, size_t count)
 }
 
 int fs_read(int fd, void *buf, size_t count)
-int fs_read(int fd, void *buf, size_t count)
 {
     /* TODO: Phase 4 */
     if (!is_mount) {
@@ -456,47 +455,43 @@ int fs_read(int fd, void *buf, size_t count)
         return -1;
     }
 
-    int file_size = fs_stat(fd);
-    if (file_size < 0) {
-        return -1;
-    }
-
-    if (opened_fd[fd].offset + count > (size_t)file_size) {
-        count = file_size - opened_fd[fd].offset;
-    }
-
-    size_t remaining = count;
+    int total_read_size = 0;
     size_t buf_pos = 0;
-    size_t read_size = 0;
+    size_t remaining = count;
+    size_t cur_offset = opened_fd[fd].offset;
 
-    while (remaining > 0) {
+    while (cur_offset < rt_dirt[opened_fd[fd].root_idx].file_size && remaining > 0) {
         int data_blk_idx = get_data_blk_idx(fd);
         char *bounce = (char *) calloc(BLOCK_SIZE, sizeof(char));
-        size_t cur_offset = opened_fd[fd].offset;
         size_t offset_in_blk = cur_offset % BLOCK_SIZE;
-        size_t cost = 0;
+        size_t read_size = 0;
 
         if (BLOCK_SIZE - offset_in_blk > remaining) {
-            cost = remaining;
+            read_size = remaining;
         } else {
-            cost = BLOCK_SIZE - offset_in_blk;
+            read_size = BLOCK_SIZE - offset_in_blk;
+        }
+
+        if (read_size > rt_dirt[opened_fd[fd].root_idx].file_size - cur_offset) {
+            read_size = rt_dirt[opened_fd[fd].root_idx].file_size - cur_offset;
         }
 
         if (block_read(data_blk_idx, (void *)bounce) == -1) {
             free(bounce);
             return -1;
         }
-        memcpy((char *)buf + buf_pos, bounce + offset_in_blk, cost);
-        buf_pos += cost;
-        remaining -= cost;
-        read_size += cost;
-        cur_offset += cost;
+        memcpy((char *)buf + buf_pos, bounce + cur_offset % BLOCK_SIZE, read_size);
+        buf_pos += read_size;
+        remaining -= read_size;
+        total_read_size += read_size;
+        cur_offset += read_size;
 
         fs_lseek(fd, cur_offset);
         free(bounce);
     }
 
-    return read_size;
+    return total_read_size;
 }
+
 
 
