@@ -390,7 +390,6 @@ int fs_write(int fd, void *buf, size_t count)
 
     while (remaining > 0) {
         int data_blk_idx = get_data_blk_idx(fd);
-        printf("heere: %d\n", data_blk_idx);
         char *bounce = (char *) calloc(BLOCK_SIZE, sizeof(char));
         int cur_offset = opened_fd[fd].offset;
         size_t offset_in_blk = cur_offset % BLOCK_SIZE;
