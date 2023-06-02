@@ -137,7 +137,7 @@ int fs_info(void)
     printf("data_blk=%u\n", super_blk.data_idx);
     printf("data_blk_count=%u\n", super_blk.data_block_num);
 
-    for (int i = 1; i < super_blk.data_block_num; i++) {
+    for (int i = 0; i < super_blk.data_block_num; i++) {
         if (fat_entries[i] == 0) {
             fat_free++;
         }
