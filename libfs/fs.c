@@ -480,7 +480,7 @@ int fs_read(int fd, void *buf, size_t count)
             free(bounce);
             return -1;
         }
-        memcpy((int8_t*))buf + buf_pos, bounce + cur_offset % BLOCK_SIZE, read_size);
+        memcpy((int8_t*))bounce + cur_offset % BLOCK_SIZE,buf + buf_pos,  read_size);
         buf_pos += read_size;
         remaining -= read_size;
         total_read_size += read_size;
